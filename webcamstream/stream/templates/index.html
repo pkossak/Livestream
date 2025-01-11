@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Livestream</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .stream {
+            flex: 1;
+            margin: 10px;
+            text-align: center;
+        }
+
+        img {
+            width: 640px; /* Szerokość strumienia */
+            height: 360px; /* Wysokość strumienia */
+            border: 1px solid #ccc;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Livestream</h1>
+
+    <div class="container">
+        <div class="stream">
+            <h2>Kamera</h2>
+            <img id="camera-frame" alt="Camera Stream">
+        </div>
+        <div class="stream">
+            <h2>Ekran</h2>
+            <img id="screen-frame" alt="Screen Stream">
+        </div>
+    </div>
+
+    <script>
+        // Połączenie dla kamery
+        const cameraFrame = document.getElementById("camera-frame");
+        const cameraSocket = new WebSocket("ws://127.0.0.1:8080/ws/camera/");
+
+        cameraSocket.onmessage = function(event) {
+            const blob = new Blob([event.data], { type: "image/jpeg" });
+            cameraFrame.src = URL.createObjectURL(blob);
+        };
+
+        cameraSocket.onclose = function() {
+            console.log("Camera WebSocket closed.");
+        };
+
+        // Połączenie dla pulpitu
+        const screenFrame = document.getElementById("screen-frame");
+        const screenSocket = new WebSocket("ws://127.0.0.1:8080/ws/screen/");
+
+        screenSocket.onmessage = function(event) {
+            const blob = new Blob([event.data], { type: "image/jpeg" });
+            screenFrame.src = URL.createObjectURL(blob);
+        };
+
+        screenSocket.onclose = function() {
+            console.log("Screen WebSocket closed.");
+        };
+
+    </script>
+</body>
+</html>
