@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from asyncio import Queue
 from channels.exceptions import StopConsumer
 import time
+import os
 
 
 class CameraStreamConsumer(AsyncWebsocketConsumer):
@@ -18,6 +19,13 @@ class CameraStreamConsumer(AsyncWebsocketConsumer):
         self.queue = Queue()  # Kolejka asynchroniczna na klatki obrazu
         self.running = False  # Flaga informująca o działaniu pętli
         self.cap = None
+        # haarcascade_path = r'C:\temp_cv2\haarcascade_frontalface_default.xml'
+        haarcascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml" # daje czasem błędy
+        self.face_cascade = cv2.CascadeClassifier(haarcascade_path)
+
+        if self.face_cascade.empty():
+            raise FileNotFoundError(
+                "Failed to load Haarcascade from path: " + haarcascade_path)
 
         # Taski asynchroniczne
         self.camera_task = None  # Zadanie wątku do czytania kamery
@@ -45,9 +53,9 @@ class CameraStreamConsumer(AsyncWebsocketConsumer):
             while self.running:
                 # Odczyt klatki z kamery
                 ret, frame = self.cap.read()
-                if not ret:
-                    # Jeśli brak klatki - break
-                    break
+                if not ret or frame is None:
+                    print("[Error] Failed to read frame from camera.")
+                    continue
 
                 # Liczenie klatek
                 frame_count += 1
@@ -62,12 +70,24 @@ class CameraStreamConsumer(AsyncWebsocketConsumer):
                     start_time = time.time()
 
                 frame = cv2.flip(frame, 1)  # Odbicie lustrzane
+
+                # detekcja
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = self.face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30)
+                )
+
+                for (x, y, w, h) in faces:
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+
                 # Kodowanie do jpg - może da się to lepiej rozwiązać
                 _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])  # 80% jakości
+
                 # Konwersja tab. numpy na bajty - do przesyłu.
                 frame_bytes = buffer.tobytes()
                 # Wrzucenie klatki do kolejki asynch.
                 asyncio.run_coroutine_threadsafe(self.queue.put(frame_bytes), loop)
+
         finally:
             # Zawsze się wykona, wyjątek lub przerwanie też się zalicza
             if self.cap is not None:
